@@ -6,21 +6,21 @@ use unic_ucd_category::GeneralCategory;
 use crate::parser::character_class::CharacterClass;
 use crate::parser::RegexEntry;
 
-#[derive(Clone)]
-pub struct Automata {
+#[derive(Clone, Debug)]
+pub struct Automaton {
     states: Vec<State>,
     terminal_states: Vec<usize>,
     start_states: Vec<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct State {
     pub debug_name: String,
     pub id: usize,
     pub transitions: Vec<Transition>,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Transition {
     pub next_state_id: usize,
     pub condition: TransitionCondition,
@@ -36,7 +36,7 @@ pub enum TransitionCondition {
     Epsilon,
 }
 
-impl Automata {
+impl Automaton {
     fn new_empty() -> Self {
         Self {
             states: Vec::new(),
@@ -367,6 +367,14 @@ impl Automata {
 
     pub fn start_states(&self) -> &[usize] {
         &self.start_states
+    }
+
+    pub fn states(&self) -> &[State] {
+        &self.states
+    }
+
+    pub fn terminal_state_ids(&self) -> &[usize] {
+        &self.terminal_states
     }
 }
 

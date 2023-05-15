@@ -243,20 +243,14 @@ fn test_grouping() {
         vec![
             PartiallyParsed::Group(vec![
                 PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-                PartiallyParsed::Lexed(RegexToken::Repetition {
-                    min: Some(1),
-                    max: None,
-                }),
+                PartiallyParsed::Lexed(RegexToken::Repetition { min: 1, max: None }),
                 PartiallyParsed::Group(vec![
-                    PartiallyParsed::Lexed(RegexToken::Repetition {
-                        min: Some(1),
-                        max: None,
-                    }),
+                    PartiallyParsed::Lexed(RegexToken::Repetition { min: 1, max: None }),
                     PartiallyParsed::Lexed(RegexToken::AnyCharacter),
                 ]),
             ]),
             PartiallyParsed::Lexed(RegexToken::Repetition {
-                min: Some(5),
+                min: 5,
                 max: Some(5),
             }),
         ]
@@ -286,7 +280,7 @@ fn test_repetitions() {
                 PartiallyParsed::Lexed(RegexToken::AnyCharacter),
                 PartiallyParsed::Group(vec![PartiallyParsed::Lexed(RegexToken::AnyCharacter)]),
             ])),
-            min: Some(5),
+            min: 5,
             max: Some(6),
         }],
     );
@@ -304,18 +298,18 @@ fn test_nested_repetitions() {
                     base: Box::new(PartiallyParsed::Group(vec![PartiallyParsed::Lexed(
                         RegexToken::AnyCharacter,
                     )])),
-                    min: Some(7),
+                    min: 7,
                     max: Some(8),
                 },
                 PartiallyParsed::Repetition {
                     base: Box::new(PartiallyParsed::Lexed(
                         RegexToken::NonUnicodeCharacterClass(CharacterClass::Char('A')),
                     )),
-                    min: Some(4),
+                    min: 4,
                     max: None,
                 },
             ])),
-            min: Some(5),
+            min: 5,
             max: Some(6),
         }],
     );
@@ -328,10 +322,7 @@ fn test_alternations_basic() {
         RegexEntry::parse_alternation,
         &vec![PartiallyParsed::Alternation(vec![
             PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-            PartiallyParsed::Lexed(RegexToken::Repetition {
-                min: Some(1),
-                max: None,
-            }),
+            PartiallyParsed::Lexed(RegexToken::Repetition { min: 1, max: None }),
         ])],
     );
 }
@@ -343,14 +334,8 @@ fn test_alternations_nested() {
         RegexEntry::parse_alternation,
         &vec![PartiallyParsed::Alternation(vec![
             PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-            PartiallyParsed::Lexed(RegexToken::Repetition {
-                min: Some(1),
-                max: None,
-            }),
-            PartiallyParsed::Lexed(RegexToken::Repetition {
-                min: Some(0),
-                max: None,
-            }),
+            PartiallyParsed::Lexed(RegexToken::Repetition { min: 1, max: None }),
+            PartiallyParsed::Lexed(RegexToken::Repetition { min: 0, max: None }),
         ])],
     );
 }
@@ -363,14 +348,8 @@ fn test_alternations_nested_recursive() {
         &vec![PartiallyParsed::Alternation(vec![
             PartiallyParsed::Group(vec![PartiallyParsed::Alternation(vec![
                 PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-                PartiallyParsed::Lexed(RegexToken::Repetition {
-                    min: Some(1),
-                    max: None,
-                }),
-                PartiallyParsed::Lexed(RegexToken::Repetition {
-                    min: Some(0),
-                    max: None,
-                }),
+                PartiallyParsed::Lexed(RegexToken::Repetition { min: 1, max: None }),
+                PartiallyParsed::Lexed(RegexToken::Repetition { min: 0, max: None }),
             ])]),
             PartiallyParsed::Group(vec![PartiallyParsed::Lexed(RegexToken::AnyCharacter)]),
         ])],
@@ -389,7 +368,7 @@ fn test_simple_parse() {
     test_full_parse(
         ".+",
         RegexEntry::Repetition {
-            min: Some(1),
+            min: 1,
             max: None,
             base: Box::new(RegexEntry::AnyCharacter),
         },
@@ -414,10 +393,10 @@ fn test_complex_parse_1() {
                         OtherLetter,
                     ]),
                 ])),
-                min: Some(0),
+                min: 0,
                 max: None,
             }),
-            min: Some(1),
+            min: 1,
             max: Some(3),
         },
     );
@@ -437,7 +416,7 @@ fn test_complex_parse_2() {
                         start: 'A',
                         end: 'Z',
                     })),
-                    min: Some(1),
+                    min: 1,
                     max: None,
                 },
                 Repetition {
@@ -445,7 +424,7 @@ fn test_complex_parse_2() {
                         start: '0',
                         end: '9',
                     })),
-                    min: Some(0),
+                    min: 0,
                     max: None,
                 },
             ]),
@@ -455,7 +434,7 @@ fn test_complex_parse_2() {
                     OtherNumber,
                     LetterNumber,
                 ])),
-                min: Some(1),
+                min: 1,
                 max: None,
             },
         ]),
@@ -476,7 +455,7 @@ fn test_url() {
             Literal('p'),
             Repetition {
                 base: Box::new(Literal('s')),
-                min: Some(0),
+                min: 0,
                 max: Some(1),
             },
             Literal(':'),
@@ -496,12 +475,12 @@ fn test_url() {
                             },
                             Char('.'),
                         ]))),
-                        min: Some(1),
+                        min: 1,
                         max: None,
                     },
                     Literal('/'),
                 ])),
-                min: Some(0),
+                min: 0,
                 max: None,
             },
             Repetition {
@@ -517,10 +496,10 @@ fn test_url() {
                         },
                         Char('.'),
                     ]))),
-                    min: Some(1),
+                    min: 1,
                     max: None,
                 }),
-                min: Some(0),
+                min: 0,
                 max: Some(1),
             },
         ]),

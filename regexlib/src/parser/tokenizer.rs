@@ -419,16 +419,10 @@ mod test {
             vec![
                 RegexToken::OpenGroup,
                 RegexToken::AnyCharacter,
+                RegexToken::Repetition { min: 1, max: None },
+                RegexToken::Repetition { min: 0, max: None },
                 RegexToken::Repetition {
-                    min: Some(1),
-                    max: None,
-                },
-                RegexToken::Repetition {
-                    min: Some(0),
-                    max: None,
-                },
-                RegexToken::Repetition {
-                    min: Some(0),
+                    min: 0,
                     max: Some(1),
                 },
                 RegexToken::Alternation,
@@ -496,19 +490,16 @@ mod test {
                     },
                 ))),
                 RegexToken::Repetition {
-                    min: Some(55),
+                    min: 55,
                     max: Some(55),
                 },
+                RegexToken::Repetition { min: 50, max: None },
                 RegexToken::Repetition {
-                    min: Some(50),
-                    max: None,
-                },
-                RegexToken::Repetition {
-                    min: None,
+                    min: 0,
                     max: Some(51),
                 },
                 RegexToken::Repetition {
-                    min: Some(52),
+                    min: 52,
                     max: Some(53),
                 },
             ],

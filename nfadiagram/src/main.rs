@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 
 use itertools::Itertools;
 
-use regexlib::automata::{Automata, TransitionCondition};
+use regexlib::automata::{Automaton, TransitionCondition};
 use regexlib::parser::character_class::CharacterClass;
 use regexlib::parser::RegexEntry;
 
@@ -32,13 +32,13 @@ fn main() {
         }
     };
 
-    let mut automata = Automata::from_regex(parsed);
+    let mut automata = Automaton::from_regex(parsed);
     output_automata(&automata, &svg_output_path);
     automata.simplify();
     output_automata(&automata, &simple_svg_output_path);
 }
 
-fn output_automata(automata: &Automata, file: &str) {
+fn output_automata(automata: &Automaton, file: &str) {
     let graphviz = automata_to_graphviz(&automata);
 
     let command = Command::new("dot")
@@ -58,7 +58,7 @@ fn output_automata(automata: &Automata, file: &str) {
     std::fs::write(file, output.stdout).unwrap();
 }
 
-fn automata_to_graphviz(automata: &Automata) -> String {
+fn automata_to_graphviz(automata: &Automaton) -> String {
     let mut graphviz = String::new();
 
     graphviz.push_str("digraph NFA{\n");
@@ -77,7 +77,7 @@ fn automata_to_graphviz(automata: &Automata) -> String {
     graphviz
 }
 
-fn emit_state(automata: &Automata, state_id: usize, graphviz: &mut String) {
+fn emit_state(automata: &Automaton, state_id: usize, graphviz: &mut String) {
     let state = automata.get_state(state_id);
 
     //debug name
