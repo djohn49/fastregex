@@ -31,7 +31,7 @@ pub enum TransitionCondition {
     AnyCharacter,
     Literal(char),
     CharacterClass(CharacterClass),
-    UnicodeCharacterCLass(Vec<GeneralCategory>),
+    UnicodeCharacterClass(Vec<GeneralCategory>),
     NegatedUnicodeClass(Vec<GeneralCategory>),
     Epsilon,
 }
@@ -212,7 +212,7 @@ impl Automata {
                 "CharacterClass",
                 [Transition::new(
                     target,
-                    TransitionCondition::UnicodeCharacterCLass(classes.clone()),
+                    TransitionCondition::UnicodeCharacterClass(classes.clone()),
                 )],
             ),
             RegexEntry::NegatedUnicodeCharacterClass(classes) => self.construct_state(

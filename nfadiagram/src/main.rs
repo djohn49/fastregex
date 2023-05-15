@@ -1,7 +1,10 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use regexlib::automata::Automata;
+use itertools::Itertools;
+
+use regexlib::automata::{Automata, TransitionCondition};
+use regexlib::parser::character_class::CharacterClass;
 use regexlib::parser::RegexEntry;
 
 fn main() {
@@ -72,7 +75,7 @@ fn emit_state(automata: &Automata, state_id: usize, graphviz: &mut String) {
     graphviz.push_str(&format!(
         "\tstate{} [label=\"{}\",shape={}];\n",
         state_id,
-        state.debug_name,
+        state_id,
         if automata.is_terminal_state(state_id) {
             "doublecircle"
         } else {
@@ -83,8 +86,44 @@ fn emit_state(automata: &Automata, state_id: usize, graphviz: &mut String) {
     //transitions
     for transition in &state.transitions {
         graphviz.push_str(&format!(
-            "\tstate{} -> state{} [label=\"{:?}\"];\n",
-            state_id, transition.next_state_id, transition.condition
+            "\tstate{} -> state{} [label=\"{}\"];\n",
+            state_id,
+            transition.next_state_id,
+            transition_to_string(&transition.condition)
         ));
+    }
+}
+
+fn transition_to_string(transition_condition: &TransitionCondition) -> String {
+    match transition_condition {
+        TransitionCondition::Epsilon => "ε".into(),
+        TransitionCondition::CharacterClass(class) => {
+            format!("[{}]", character_class_to_string(class))
+        }
+        TransitionCondition::Literal(ch) => format!("'{}'", ch),
+        TransitionCondition::AnyCharacter => "*".into(),
+        TransitionCondition::UnicodeCharacterClass(categories) => categories
+            .iter()
+            .map(|category| format!("{:?}", category))
+            .join(", "),
+        TransitionCondition::NegatedUnicodeClass(categories) => format!(
+            "!{}",
+            categories
+                .iter()
+                .map(|category| format!("{:?}", category))
+                .join(", ")
+        ),
+    }
+}
+
+fn character_class_to_string(character_class: &CharacterClass) -> String {
+    match character_class {
+        CharacterClass::Negated(class) => format!("^{}", character_class_to_string(class.as_ref())),
+        CharacterClass::Char(ch) => format!("{}", *ch),
+        CharacterClass::Range { start, end } => format!("{}-{}", *start, *end),
+        CharacterClass::Disjunction(classes) => classes
+            .iter()
+            .map(|class| character_class_to_string(class))
+            .collect(),
     }
 }

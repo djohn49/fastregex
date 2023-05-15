@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 regexlib = { path = "../regexlib" }
+itertools = "0.10.5"
