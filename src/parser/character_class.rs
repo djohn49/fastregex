@@ -7,18 +7,32 @@ pub enum CharacterClass {
 }
 
 impl CharacterClass {
-    pub fn try_parse(remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
+    pub fn try_parse(mut remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
         if remaining.chars().nth(0) == Some('[') {
-            let no_prefix_parse = Self::try_parse_no_prefix(&remaining[1..])?;
-            match no_prefix_parse {
-                Some((class, remaining)) => {
-                    if remaining.chars().nth(0) == Some(']') {
-                        Ok(Some((class, &remaining[1..])))
-                    } else {
-                        Err("Parsed character class successfully, but it does not end in ].".into())
-                    }
+            remaining = &remaining[1..];
+            let mut disjuncton = Vec::new();
+
+            loop {
+                if remaining.starts_with(']') {
+                    break;
+                } else if let Some((class, new_remaining)) = Self::try_parse_no_prefix(remaining)? {
+                    disjuncton.push(class);
+                    remaining = new_remaining;
+                } else {
+                    return Err(format!("Failed to parse remaining character class pattern from start of string: {}", remaining));
                 }
-                None => return Ok(None),
+            }
+
+            if disjuncton.len() == 1 {
+                Ok(Some((
+                    disjuncton.into_iter().nth(0).unwrap(),
+                    &remaining[1..],
+                )))
+            } else {
+                Ok(Some((
+                    CharacterClass::Disjunction(disjuncton),
+                    &remaining[1..],
+                )))
             }
         } else {
             Ok(None)
@@ -157,6 +171,23 @@ fn test_range() {
             start: 'a',
             end: 'z',
         }
+    );
+}
+
+#[test]
+fn test_double_range() {
+    assert_eq!(
+        test_parse("[a-z0-9]").unwrap(),
+        CharacterClass::Disjunction(vec![
+            CharacterClass::Range {
+                start: 'a',
+                end: 'z',
+            },
+            CharacterClass::Range {
+                start: '0',
+                end: '9',
+            },
+        ])
     );
 }
 
