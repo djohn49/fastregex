@@ -7,10 +7,10 @@ use syn::{parse_macro_input, Lit, LitInt, LitStr};
 use regexlib::automata::Automaton;
 use regexlib::parser::RegexEntry;
 
-use crate::automata::EmittableAutomaton;
+use crate::automaton::EmittableAutomaton;
 use crate::matcher_declaration::MatcherDeclaration;
 
-mod automata;
+mod automaton;
 mod matcher_declaration;
 
 #[proc_macro]
@@ -34,8 +34,6 @@ pub fn matcher(input: TokenStream) -> TokenStream {
         automaton
     };
 
-    let emittable_automata = EmittableAutomaton::new(&automaton);
-
     let prefix_check = if automaton.prefix().is_empty() {
         quote!()
     } else {
@@ -58,6 +56,8 @@ pub fn matcher(input: TokenStream) -> TokenStream {
         }
     };
 
+    let emittable_automata = EmittableAutomaton::new(automaton);
+
     let function_name = matcher_declaration.function_name;
     quote!(
         fn #function_name(string: impl ::core::convert::AsRef<str>) -> bool{
@@ -67,17 +67,24 @@ pub fn matcher(input: TokenStream) -> TokenStream {
             #prefix_check
             let mut chars = str::chars(string);
 
-            let mut automaton = Automoton::new();
+            let mut scratch_space = ScratchSpace::new();
+            let mut automaton_a = Automaton::new();
+            let mut automaton_b = Automaton::new();
+
+            let mut from_automaton = &mut automaton_a;
+            let mut to_automaton = &mut automaton_b;
 
             while let Some(char) = chars.next(){
-                automaton = automaton.advance(char);
+                to_automaton.advance_from(from_automaton, char, &mut scratch_space);
 
-                if(automaton.is_failed()){
+                if(to_automaton.is_failed()){
                     return false;
                 }
+
+                ::core::mem::swap(to_automaton, from_automaton);
             }
 
-            automaton.is_terminated()
+            to_automaton.is_terminated()
         }
     )
     .into()
