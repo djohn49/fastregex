@@ -25,7 +25,8 @@ fn main() {
         }
     };
 
-    let automata = Automata::from_regex(parsed);
+    let mut automata = Automata::from_regex(parsed);
+    automata.simplify();
 
     let graphviz = automata_to_graphviz(&automata);
 
@@ -50,6 +51,7 @@ fn automata_to_graphviz(automata: &Automata) -> String {
     let mut graphviz = String::new();
 
     graphviz.push_str("digraph NFA{\n");
+    //graphviz.push_str("\trankdir=LR;\n");
     for state_id in 0..automata.state_count() {
         emit_state(automata, state_id, &mut graphviz);
     }

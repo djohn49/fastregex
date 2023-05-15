@@ -1,26 +1,32 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::process::id;
+
 use unic_ucd_category::GeneralCategory;
 
 use crate::parser::character_class::CharacterClass;
 use crate::parser::RegexEntry;
 
+#[derive(Clone)]
 pub struct Automata {
     states: Vec<State>,
     terminal_states: Vec<usize>,
     start_state: usize,
 }
 
+#[derive(Clone)]
 pub struct State {
     pub debug_name: String,
     pub id: usize,
     pub transitions: Vec<Transition>,
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Transition {
     pub next_state_id: usize,
     pub condition: TransitionCondition,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TransitionCondition {
     AnyCharacter,
     Literal(char),
@@ -36,6 +42,133 @@ impl Automata {
             states: Vec::new(),
             terminal_states: Vec::new(),
             start_state: 0,
+        }
+    }
+
+    pub fn simplify(&mut self) {
+        self.remove_duplicate_transitions();
+        self.simplify_states();
+        self.remove_dead_states();
+    }
+
+    fn remove_dead_states(&mut self) {
+        let mut new_states = self
+            .states
+            .iter()
+            .filter(|state| !self.is_state_dead(*state))
+            .map(|state| state.clone())
+            .collect::<Vec<_>>();
+
+        let id_map = new_states
+            .iter()
+            .enumerate()
+            .map(|(index, state)| (state.id, index))
+            .collect::<BTreeMap<_, _>>();
+
+        for new_state in &mut new_states {
+            new_state.id = id_map[&new_state.id];
+            new_state.transitions = new_state
+                .transitions
+                .iter()
+                .filter_map(|transition| {
+                    Some(Transition::new(
+                        *id_map.get(&transition.next_state_id)?,
+                        transition.condition.clone(),
+                    ))
+                })
+                .collect();
+        }
+
+        self.start_state = id_map[&self.start_state];
+
+        self.terminal_states = self
+            .terminal_states
+            .iter()
+            .filter_map(|state_id| id_map.get(state_id))
+            .map(|u| *u)
+            .collect();
+
+        self.states = new_states;
+    }
+
+    fn is_state_dead(&self, state: &State) -> bool {
+        let mut checked = BTreeSet::new();
+        self.is_state_dead_checked(&mut checked, state)
+    }
+
+    fn is_state_dead_checked(&self, checked: &mut BTreeSet<usize>, state: &State) -> bool {
+        checked.insert(state.id);
+
+        if self.terminal_states.contains(&state.id) {
+            return false;
+        }
+
+        for transition in &state.transitions {
+            if !checked.contains(&transition.next_state_id) {
+                if !self.is_state_dead_checked(checked, &self.states[transition.next_state_id]) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    fn simplify_states(&mut self) {
+        self.states = self
+            .states
+            .iter()
+            .map(|state| self.calculate_new_state(state))
+            .collect();
+    }
+
+    fn calculate_new_state(&self, old: &State) -> State {
+        let mut state = State {
+            id: old.id,
+            debug_name: old.debug_name.clone(),
+            transitions: Vec::new(),
+        };
+
+        for old_transition in &old.transitions {
+            if !old_transition.condition.is_epsilon() {
+                let mut target_epsilon_reach = BTreeSet::new();
+                self.calculate_epsilon_reach(
+                    &mut target_epsilon_reach,
+                    old_transition.next_state_id,
+                );
+
+                for new_target in target_epsilon_reach {
+                    state.transitions.push(Transition::new(
+                        new_target,
+                        old_transition.condition.clone(),
+                    ));
+                }
+            }
+        }
+
+        state
+    }
+
+    fn calculate_epsilon_reach(&self, set: &mut BTreeSet<usize>, state_id: usize) {
+        if !set.contains(&state_id) {
+            set.insert(state_id);
+            for transition in &self.states[state_id].transitions {
+                if let TransitionCondition::Epsilon = transition.condition {
+                    self.calculate_epsilon_reach(set, transition.next_state_id);
+                }
+            }
+        }
+    }
+
+    fn remove_duplicate_transitions(&mut self) {
+        for state in &mut self.states {
+            let mut new_transitions = Vec::new();
+            for transition in &state.transitions {
+                if !new_transitions.contains(transition) {
+                    new_transitions.push(transition.clone());
+                }
+            }
+            state.transitions = new_transitions;
         }
     }
 
@@ -245,6 +378,15 @@ impl Transition {
         Self {
             next_state_id,
             condition,
+        }
+    }
+}
+
+impl TransitionCondition {
+    fn is_epsilon(&self) -> bool {
+        match self {
+            TransitionCondition::Epsilon => true,
+            _ => false,
         }
     }
 }
