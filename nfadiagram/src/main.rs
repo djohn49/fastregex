@@ -10,14 +10,18 @@ use regexlib::parser::RegexEntry;
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
 
-    if args.len() != 3 {
-        eprintln!("Usage: {} <regex> <svg output>", args[0]);
+    if args.len() != 4 {
+        eprintln!(
+            "Usage: {} <regex> <simple svg output> <svg output>",
+            args[0]
+        );
         std::process::exit(-1);
     }
 
     let mut args_iter = args.into_iter();
     args_iter.next(); //skip target
     let regex = args_iter.next().unwrap();
+    let simple_svg_output_path = args_iter.next().unwrap();
     let svg_output_path = args_iter.next().unwrap();
 
     let parsed = match RegexEntry::parse(&regex) {
@@ -29,7 +33,12 @@ fn main() {
     };
 
     let mut automata = Automata::from_regex(parsed);
+    output_automata(&automata, &svg_output_path);
     automata.simplify();
+    output_automata(&automata, &simple_svg_output_path);
+}
+
+fn output_automata(automata: &Automata, file: &str) {
     let graphviz = automata_to_graphviz(&automata);
 
     let command = Command::new("dot")
@@ -46,7 +55,7 @@ fn main() {
         .unwrap();
     let output = command.wait_with_output().unwrap();
 
-    std::fs::write(svg_output_path, output.stdout).unwrap();
+    std::fs::write(file, output.stdout).unwrap();
 }
 
 fn automata_to_graphviz(automata: &Automata) -> String {
