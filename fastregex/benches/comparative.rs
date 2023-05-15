@@ -10,7 +10,8 @@ matcher!(
 fn bench_comparatively(c: &mut Criterion){
     let regex = Regex::new("^https?://(([A-Za-z.]+/)+([A-Za-z.]+)?)|([A-Za-z.]+)$").unwrap();
 
-    let haystack = ["http://test", "http:/", "http://", "http://example.com/this/is/a/test/page.html", "The quick brown fox jumped over the lazy dog."];
+    //let haystack = ["http://test", "http:/", "http://", "http://example.com/this/is/a/test/page.html", "The quick brown fox jumped over the lazy dog."];
+    let haystack = ["The quick brown fox jumped over the lazy dog."];
 
     for haystack in haystack {
         let mut group = c.benchmark_group(haystack);

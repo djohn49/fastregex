@@ -47,6 +47,10 @@ pub fn matcher(input: TokenStream) -> TokenStream {
 
             while let Some(char) = chars.next(){
                 automaton = automaton.advance(char);
+
+                if(automaton.is_failed()){
+                    return false;
+                }
             }
 
             automaton.is_terminated()

@@ -13,6 +13,7 @@ pub struct EmittableAutomaton {
     state_variable_constructors: Vec<StateVariableConstructor>,
     advance_function: AdvanceFunction,
     terminal_state_names: Vec<Ident>,
+    state_variable_names: Vec<Ident>,
 }
 
 impl EmittableAutomaton {
@@ -39,11 +40,14 @@ impl EmittableAutomaton {
             .map(|id| Ident::new(&format!("state{}", id), Span::call_site()))
             .collect::<Vec<_>>();
 
+        let state_variable_names = automaton.states().iter().map(|state| Ident::new(&format!("state{}", state.id), Span::call_site())).collect();
+
         Self {
             state_variables,
             state_variable_constructors,
             advance_function,
             terminal_state_names,
+            state_variable_names
         }
     }
 }
@@ -54,6 +58,7 @@ impl ToTokens for EmittableAutomaton {
         let state_variable_constructors = &self.state_variable_constructors;
         let advance_function = &self.advance_function;
         let terminal_state_names = &self.terminal_state_names;
+        let state_variable_names = &self.state_variable_names;
 
         tokens.append_all(quote!(
             struct Automoton {
@@ -74,6 +79,9 @@ impl ToTokens for EmittableAutomaton {
                     #(self.#terminal_state_names)||*
                 }
 
+                fn is_failed(&self) -> bool{
+                    !(#(self.#state_variable_names)||*)
+                }
             }
 
         ));
