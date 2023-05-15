@@ -10,36 +10,48 @@ impl CharacterClass {
     pub fn try_parse(mut remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
         if remaining.chars().nth(0) == Some('[') {
             remaining = &remaining[1..];
-            let mut disjuncton = Vec::new();
-
-            loop {
-                if remaining.starts_with(']') {
-                    break;
-                } else if let Some((class, new_remaining)) = Self::try_parse_no_prefix(remaining)? {
-                    disjuncton.push(class);
-                    remaining = new_remaining;
-                } else {
-                    return Err(format!("Failed to parse remaining character class pattern from start of string: {}", remaining));
+            match Self::try_parse_no_prefix(remaining)? {
+                Some((parsed, remaining)) => {
+                    if !remaining.starts_with(']') {
+                        return Err(format!(
+                            "Expected ] after character class, found {}",
+                            remaining
+                        ));
+                    }
+                    Ok(Some((parsed, &remaining[1..])))
                 }
-            }
-
-            if disjuncton.len() == 1 {
-                Ok(Some((
-                    disjuncton.into_iter().nth(0).unwrap(),
-                    &remaining[1..],
-                )))
-            } else {
-                Ok(Some((
-                    CharacterClass::Disjunction(disjuncton),
-                    &remaining[1..],
-                )))
+                one => Ok(None),
             }
         } else {
             Ok(None)
         }
     }
 
-    fn try_parse_no_prefix(remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
+    fn try_parse_no_prefix(mut remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
+        let mut disjuncton = Vec::new();
+
+        loop {
+            if remaining.starts_with(']') {
+                break;
+            } else if let Some((class, new_remaining)) = Self::try_parse_single_class(remaining)? {
+                disjuncton.push(class);
+                remaining = new_remaining;
+            } else {
+                return Err(format!(
+                    "Failed to parse remaining character class pattern from start of string: {}",
+                    remaining
+                ));
+            }
+        }
+
+        if disjuncton.len() == 1 {
+            Ok(Some((disjuncton.into_iter().nth(0).unwrap(), remaining)))
+        } else {
+            Ok(Some((CharacterClass::Disjunction(disjuncton), remaining)))
+        }
+    }
+
+    fn try_parse_single_class(remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
         if let Some(tuple) = Self::try_parse_negated(remaining)? {
             return Ok(Some(tuple));
         }
@@ -89,29 +101,14 @@ impl CharacterClass {
     }
 
     fn try_parse_simple_char(remaining: &str) -> Result<Option<(CharacterClass, &str)>, String> {
-        let mut chars = Vec::new();
-        let mut index = 0;
-        loop {
-            match remaining.chars().nth(index) {
-                Some(']') => break,
-                Some(other) => chars.push(other),
-                None => return Err("Failed to parse simple character list character class because found end of pattern before ].".into()),
-            }
-            index += 1;
+        if remaining.len() < 1 {
+            return Ok(None);
         }
 
-        let class = if chars.len() == 1 {
-            CharacterClass::Char(chars[0])
-        } else {
-            CharacterClass::Disjunction(
-                chars
-                    .into_iter()
-                    .map(|ch| CharacterClass::Char(ch))
-                    .collect(),
-            )
-        };
-
-        Ok(Some((class, &remaining[index..])))
+        Ok(Some((
+            CharacterClass::Char(remaining.chars().nth(0).unwrap()),
+            &remaining[1..],
+        )))
     }
 }
 
@@ -121,6 +118,10 @@ fn test_parse(remaining: &str) -> Option<CharacterClass> {
         Ok(Some((parsed, remaining))) => {
             assert_eq!(remaining.len(), 0);
             Some(parsed)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            None
         }
         _ => None,
     }
