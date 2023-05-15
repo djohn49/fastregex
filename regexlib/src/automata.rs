@@ -11,6 +11,7 @@ pub struct Automaton {
     states: Vec<State>,
     terminal_states: Vec<usize>,
     start_states: Vec<usize>,
+    prefix: String,
 }
 
 #[derive(Clone, Debug)]
@@ -42,20 +43,50 @@ impl Automaton {
             states: Vec::new(),
             terminal_states: Vec::new(),
             start_states: Vec::new(),
+            prefix: String::new(),
         }
     }
 
     pub fn simplify(&mut self) {
+        self.simplify_prefix();
         self.remove_duplicate_transitions();
         self.simplify_states();
         self.remove_dead_states();
     }
 
+    fn simplify_prefix(&mut self){
+        if self.start_states.len() != 1{
+            panic!("Attempted to simplify away a prefix while there is more than 1 start state.");
+        }
+
+        let mut prefix = String::new();
+        let mut current_state = &self.states[self.start_states[0]];
+
+        loop{
+            if current_state.transitions.len() == 1{
+                let transition = &current_state.transitions[0];
+                if let TransitionCondition::Literal(ch) = transition.condition{
+                    prefix.push(ch);
+                    current_state = &self.states[transition.next_state_id];
+                    continue;
+                }
+            }
+            break;
+        }
+
+        if prefix.len() != 0{
+            self.prefix = prefix;
+            self.start_states = vec![current_state.id];
+        }
+    }
+
     fn remove_dead_states(&mut self) {
+        let reachable_states = self.calculate_reachable_states();
+
         let mut new_states = self
             .states
             .iter()
-            .filter(|state| !self.is_state_dead(*state))
+            .filter(|state| reachable_states.contains(&state.id) && !self.is_state_dead(*state))
             .map(|state| state.clone())
             .collect::<Vec<_>>();
 
@@ -94,6 +125,28 @@ impl Automaton {
             .collect();
 
         self.states = new_states;
+    }
+
+    fn calculate_reachable_states(&self) -> BTreeSet<usize>{
+        let mut reachable_states = BTreeSet::new();
+
+        for start_state in &self.start_states{
+            self.consider_state(*start_state, &mut reachable_states);
+        }
+
+        reachable_states
+    }
+
+    fn consider_state(&self, state_id: usize, reachable_states: &mut BTreeSet<usize>){
+        if reachable_states.contains(&state_id){
+            return;
+        }
+
+        reachable_states.insert(state_id);
+
+        for transition_to in &self.states[state_id].transitions{
+            self.consider_state(transition_to.next_state_id, reachable_states);
+        }
     }
 
     fn is_state_dead(&self, state: &State) -> bool {
@@ -375,6 +428,10 @@ impl Automaton {
 
     pub fn terminal_state_ids(&self) -> &[usize] {
         &self.terminal_states
+    }
+
+    pub fn prefix(&self) -> &str{
+        &self.prefix
     }
 }
 

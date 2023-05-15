@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 
 use quote::quote;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, Lit, LitInt, LitStr};
 
 use regexlib::automata::Automaton;
 use regexlib::parser::RegexEntry;
@@ -35,12 +36,35 @@ pub fn matcher(input: TokenStream) -> TokenStream {
 
     let emittable_automata = EmittableAutomaton::new(&automaton);
 
+    let prefix_check = if automaton.prefix().is_empty() {
+        quote!()
+    } else {
+        let prefix_literal = Lit::Str(LitStr::new(automaton.prefix(), Span::call_site()));
+        let prefix_length_literal = Lit::Int(LitInt::new(
+            &format!("{}", automaton.prefix().len()),
+            Span::call_site(),
+        ));
+
+        quote! {
+            if string.len() < #prefix_length_literal{
+                return false;
+            }
+
+            let (prefix, string) = string.split_at(#prefix_length_literal);
+
+            if prefix != #prefix_literal{
+                return false;
+            }
+        }
+    };
+
     let function_name = matcher_declaration.function_name;
     quote!(
         fn #function_name(string: impl ::core::convert::AsRef<str>) -> bool{
             #emittable_automata
 
             let string = ::core::convert::AsRef::as_ref(&string);
+            #prefix_check
             let mut chars = str::chars(string);
 
             let mut automaton = Automoton::new();
