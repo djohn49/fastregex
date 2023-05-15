@@ -289,14 +289,10 @@ impl Automata {
                     .push(Transition::new(loop_start, TransitionCondition::Epsilon));
 
                 //non-accept states
-                let mut next_target = epsilon_trampoline;
-                if *min != 0 {
-                    for _ in 0..(*min - 1) {
-                        next_target = self.add_regex_entry(base, next_target);
-                    }
-                }
+                let non_accept_start =
+                    self.construct_exact_repetition_count(epsilon_trampoline, base, *min);
 
-                next_target
+                non_accept_start
             }
         }
     }
