@@ -1,7 +1,7 @@
 use crate::parser::character_class::CharacterClass;
 use unic_ucd_category::GeneralCategory;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RegexToken {
     AnyCharacter,
     UnicodeCharacterClass(Vec<GeneralCategory>),
