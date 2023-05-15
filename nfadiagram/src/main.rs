@@ -27,7 +27,6 @@ fn main() {
 
     let mut automata = Automata::from_regex(parsed);
     automata.simplify();
-
     let graphviz = automata_to_graphviz(&automata);
 
     let command = Command::new("dot")
@@ -55,11 +54,13 @@ fn automata_to_graphviz(automata: &Automata) -> String {
     for state_id in 0..automata.state_count() {
         emit_state(automata, state_id, &mut graphviz);
     }
-    graphviz.push_str(&format!(
-        "\tstart [shape=plaintext];\nstart->state{};",
-        automata.start_state_id()
-    ));
-    graphviz.push_str("}\n");
+
+    graphviz.push_str("\tstart [shape=plaintext];\n");
+    for start_state in automata.start_states() {
+        graphviz.push_str(&format!("\tstart->state{};\n", *start_state));
+    }
+
+    graphviz.push_str("}");
 
     graphviz
 }

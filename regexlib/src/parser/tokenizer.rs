@@ -11,7 +11,7 @@ pub enum RegexToken {
     Alternation,
     OpenGroup,
     CloseGroup,
-    Repetition { min: Option<u64>, max: Option<u64> },
+    Repetition { min: u64, max: Option<u64> },
     Literal(char),
 }
 
@@ -82,10 +82,7 @@ impl RegexToken {
         Self::try_parse_static_prefix_character(
             remaining,
             "*",
-            RegexToken::Repetition {
-                min: Some(0),
-                max: None,
-            },
+            RegexToken::Repetition { min: 0, max: None },
         )
     }
 
@@ -93,10 +90,7 @@ impl RegexToken {
         Self::try_parse_static_prefix_character(
             remaining,
             "+",
-            RegexToken::Repetition {
-                min: Some(1),
-                max: None,
-            },
+            RegexToken::Repetition { min: 1, max: None },
         )
     }
 
@@ -105,7 +99,7 @@ impl RegexToken {
             remaining,
             "?",
             RegexToken::Repetition {
-                min: Some(0),
+                min: 0,
                 max: Some(1),
             },
         )
@@ -281,7 +275,10 @@ impl RegexToken {
         };
 
         Ok(Some((
-            RegexToken::Repetition { min, max },
+            RegexToken::Repetition {
+                min: if let Some(min) = min { min } else { 0 },
+                max,
+            },
             &remaining[(2 + inner_string.len())..],
         )))
     }

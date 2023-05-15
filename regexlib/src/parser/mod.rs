@@ -18,7 +18,7 @@ pub enum RegexEntry {
     Alternation(Vec<RegexEntry>),
     Repetition {
         base: Box<RegexEntry>,
-        min: Option<u64>,
+        min: u64,
         max: Option<u64>,
     },
 }
@@ -30,7 +30,7 @@ enum PartiallyParsed {
     Group(Vec<PartiallyParsed>),
     Repetition {
         base: Box<PartiallyParsed>,
-        min: Option<u64>,
+        min: u64,
         max: Option<u64>,
     },
     Alternation(Vec<PartiallyParsed>),

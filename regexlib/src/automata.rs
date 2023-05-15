@@ -10,7 +10,7 @@ use crate::parser::RegexEntry;
 pub struct Automata {
     states: Vec<State>,
     terminal_states: Vec<usize>,
-    start_state: usize,
+    start_states: Vec<usize>,
 }
 
 #[derive(Clone)]
@@ -41,7 +41,7 @@ impl Automata {
         Self {
             states: Vec::new(),
             terminal_states: Vec::new(),
-            start_state: 0,
+            start_states: Vec::new(),
         }
     }
 
@@ -79,7 +79,12 @@ impl Automata {
                 .collect();
         }
 
-        self.start_state = id_map[&self.start_state];
+        self.start_states = self
+            .start_states
+            .iter()
+            .filter_map(|state_id| id_map.get(state_id))
+            .map(|u| *u)
+            .collect();
 
         self.terminal_states = self
             .terminal_states
@@ -115,6 +120,14 @@ impl Automata {
     }
 
     fn simplify_states(&mut self) {
+        let mut new_start_states = BTreeSet::new();
+        for start_state in &self.start_states {
+            let mut epsilon_reach = BTreeSet::new();
+            self.calculate_epsilon_reach(&mut epsilon_reach, *start_state);
+            new_start_states.append(&mut epsilon_reach);
+        }
+        self.start_states = new_start_states.into_iter().collect();
+
         self.states = self
             .states
             .iter()
@@ -184,7 +197,7 @@ impl Automata {
         automata.terminal_states.push(terminal_state_id);
 
         let start_state = automata.add_regex_entry(&regex, terminal_state_id);
-        automata.start_state = start_state;
+        automata.start_states = vec![start_state];
 
         automata
     }
@@ -244,7 +257,7 @@ impl Automata {
             }
             RegexEntry::Repetition {
                 base,
-                min: Some(min),
+                min,
                 max: Some(max),
             } => {
                 //create accept states (accept within the repetition)
@@ -258,7 +271,7 @@ impl Automata {
             }
             RegexEntry::Repetition {
                 base,
-                min: Some(min),
+                min,
                 max: None,
             } => {
                 //looping repetition trampoline
@@ -276,8 +289,8 @@ impl Automata {
                     .push(Transition::new(loop_start, TransitionCondition::Epsilon));
 
                 //non-accept states
-                let mut next_target = loop_start;
-                if (*min != 0) {
+                let mut next_target = epsilon_trampoline;
+                if *min != 0 {
                     for _ in 0..(*min - 1) {
                         next_target = self.add_regex_entry(base, next_target);
                     }
@@ -285,18 +298,6 @@ impl Automata {
 
                 next_target
             }
-            RegexEntry::Repetition {
-                base,
-                min: None,
-                max: Some(max),
-            } => self.construct_maximum_repetition_count(target, base, *max),
-            RegexEntry::Repetition {
-                base,
-                min: None,
-                max: None,
-            } => panic!(
-                "Encountered repetition with no minimum or maximum. This is an internal error."
-            ),
         }
     }
 
@@ -368,8 +369,8 @@ impl Automata {
         self.terminal_states.contains(&state_id)
     }
 
-    pub fn start_state_id(&self) -> usize {
-        self.start_state
+    pub fn start_states(&self) -> &[usize] {
+        &self.start_states
     }
 }
 
