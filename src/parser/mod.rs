@@ -1,5 +1,9 @@
 use unic_ucd_category::GeneralCategory;
 
+use crate::parser::character_class::CharacterClass;
+
+pub mod character_class;
+
 pub struct ParsedRegex {}
 
 #[derive(Debug, Eq, PartialEq)]
@@ -7,6 +11,7 @@ pub enum RegexEntry {
     AnyCharacter,
     UnicodeCharacterClass(Vec<GeneralCategory>),
     NegatedUnicodeCharacterClass(Vec<GeneralCategory>),
+    NonUnicodeCharacterClass(CharacterClass),
     CharList(Vec<CharListEntry>),
     NegatedCharList(Vec<CharListEntry>),
     Concatenation {
@@ -69,6 +74,7 @@ impl RegexEntry {
         //we must parse the multi letter case here first so that \p{ is not seen as a single-unicode class name with the invalid identifier '{'. We could simply move on on such failures, but it is more user-friendly to return a useful error in the case of unknown class names
         try_entry!(Self::try_parse_negated_multi_letter_unicode_class_name);
         try_entry!(Self::try_parse_negated_one_letter_unicode_class_name);
+        try_entry!(Self::try_parse_character_class);
 
         Ok(None)
     }
@@ -171,6 +177,16 @@ impl RegexEntry {
         }
     }
 
+    fn try_parse_character_class(remaining: &str) -> Result<Option<(RegexEntry, &str)>, String> {
+        match CharacterClass::try_parse(remaining)? {
+            Some((class, remaining)) => Ok(Some((
+                RegexEntry::NonUnicodeCharacterClass(class),
+                remaining,
+            ))),
+            None => Ok(None),
+        }
+    }
+
     fn parse_string_until_bracket(remaining: &str) -> String {
         let mut class_name = String::new();
 
@@ -268,6 +284,7 @@ impl RegexEntry {
 
 #[cfg(test)]
 mod test {
+    use crate::parser::character_class::CharacterClass;
     use crate::parser::RegexEntry;
 
     fn assert_equal(regex: &str, expected: RegexEntry) {
@@ -290,7 +307,7 @@ mod test {
         use unic_ucd_category::GeneralCategory::*;
 
         assert_equal(
-            r#".\d\D\pL\pM\pC\p{Lu}\p{Math_Symbol}\PL\PM\PC\P{Lu}\P{Math_Symbol}"#,
+            r#".\d\D\pL\pM\pC\p{Lu}\p{Math_Symbol}\PL\PM\PC\P{Lu}\P{Math_Symbol}[a][xyz][^a][^xyz][a-z][^a-z]"#,
             RegexEntry::Group(vec![
                 RegexEntry::AnyCharacter,
                 RegexEntry::UnicodeCharacterClass(vec![DecimalNumber, OtherNumber, LetterNumber]),
@@ -329,6 +346,32 @@ mod test {
                 ]),
                 RegexEntry::NegatedUnicodeCharacterClass(vec![UppercaseLetter]),
                 RegexEntry::NegatedUnicodeCharacterClass(vec![MathSymbol]),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Char('a')),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Disjunction(vec![
+                    CharacterClass::Char('x'),
+                    CharacterClass::Char('y'),
+                    CharacterClass::Char('z'),
+                ])),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Negated(Box::new(
+                    CharacterClass::Char('a'),
+                ))),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Negated(Box::new(
+                    CharacterClass::Disjunction(vec![
+                        CharacterClass::Char('x'),
+                        CharacterClass::Char('y'),
+                        CharacterClass::Char('z'),
+                    ]),
+                ))),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Range {
+                    start: 'a',
+                    end: 'z',
+                }),
+                RegexEntry::NonUnicodeCharacterClass(CharacterClass::Negated(Box::new(
+                    CharacterClass::Range {
+                        start: 'a',
+                        end: 'z',
+                    },
+                ))),
             ]),
         );
     }
