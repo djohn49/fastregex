@@ -7,9 +7,6 @@ pub enum RegexToken {
     UnicodeCharacterClass(Vec<GeneralCategory>),
     NegatedUnicodeCharacterClass(Vec<GeneralCategory>),
     NonUnicodeCharacterClass(CharacterClass),
-    ZeroOrMore,
-    OneOrMore,
-    Optional,
     Alternation,
     OpenGroup,
     CloseGroup,
@@ -79,15 +76,36 @@ impl RegexToken {
     }
 
     fn try_parse_zero_or_more(remaining: &str) -> Result<Option<(RegexToken, &str)>, String> {
-        Self::try_parse_static_prefix_character(remaining, "*", RegexToken::ZeroOrMore)
+        Self::try_parse_static_prefix_character(
+            remaining,
+            "*",
+            RegexToken::Repetition {
+                min: Some(0),
+                max: None,
+            },
+        )
     }
 
     fn try_parse_one_or_more(remaining: &str) -> Result<Option<(RegexToken, &str)>, String> {
-        Self::try_parse_static_prefix_character(remaining, "+", RegexToken::OneOrMore)
+        Self::try_parse_static_prefix_character(
+            remaining,
+            "+",
+            RegexToken::Repetition {
+                min: Some(1),
+                max: None,
+            },
+        )
     }
 
     fn try_parse_optional(remaining: &str) -> Result<Option<(RegexToken, &str)>, String> {
-        Self::try_parse_static_prefix_character(remaining, "?", RegexToken::Optional)
+        Self::try_parse_static_prefix_character(
+            remaining,
+            "?",
+            RegexToken::Repetition {
+                min: Some(0),
+                max: Some(1),
+            },
+        )
     }
 
     fn try_parse_alternation(remaining: &str) -> Result<Option<(RegexToken, &str)>, String> {
@@ -389,9 +407,18 @@ mod test {
             vec![
                 RegexToken::OpenGroup,
                 RegexToken::AnyCharacter,
-                RegexToken::OneOrMore,
-                RegexToken::ZeroOrMore,
-                RegexToken::Optional,
+                RegexToken::Repetition {
+                    min: Some(1),
+                    max: None,
+                },
+                RegexToken::Repetition {
+                    min: Some(0),
+                    max: None,
+                },
+                RegexToken::Repetition {
+                    min: Some(0),
+                    max: Some(1),
+                },
                 RegexToken::Alternation,
                 RegexToken::CloseGroup,
                 RegexToken::UnicodeCharacterClass(vec![DecimalNumber, OtherNumber, LetterNumber]),
