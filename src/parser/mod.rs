@@ -32,6 +32,7 @@ enum PartiallyParsed {
         min: Option<u64>,
         max: Option<u64>,
     },
+    Alternation(Vec<PartiallyParsed>),
 }
 
 impl RegexEntry {
@@ -42,8 +43,10 @@ impl RegexEntry {
             Self::parse_for_all_groups_recursively(grouped, &Self::parse_repetitions)?;
         let alternations =
             Self::parse_for_all_groups_recursively(repetitions, &Self::parse_alternation)?;
+        let mut parsed = Self::finish_parsing(alternations);
+        Self::simplify_ast(&mut parsed);
 
-        unimplemented!()
+        Ok(parsed)
     }
 
     fn lex(regex: &str) -> Result<Vec<PartiallyParsed>, String> {
@@ -187,6 +190,46 @@ impl RegexEntry {
 
         Ok(input)
     }
+
+    fn finish_parsing(input: Vec<PartiallyParsed>) -> RegexEntry {
+        let concatenation = input
+            .into_iter()
+            .map(|partially_parsed| Self::lower_single_partially_parsed(partially_parsed))
+            .collect::<Vec<_>>();
+        RegexEntry::Concatenation(concatenation)
+    }
+
+    fn lower_single_partially_parsed(partially_parsed: PartiallyParsed) -> RegexEntry {
+        match partially_parsed {
+            PartiallyParsed::Lexed(RegexToken::AnyCharacter) => RegexEntry::AnyCharacter,
+            PartiallyParsed::Lexed(RegexToken::NonUnicodeCharacterClass(class)) => RegexEntry::NonUnicodeCharacterClass(class),
+            PartiallyParsed::Lexed(RegexToken::NegatedUnicodeCharacterClass(categories)) => RegexEntry::NegatedUnicodeCharacterClass(categories),
+            PartiallyParsed::Lexed(RegexToken::UnicodeCharacterClass(categories)) => RegexEntry::UnicodeCharacterClass(categories),
+            PartiallyParsed::Lexed(token) => panic!("Encountered unexpected lexed but not parsed token when lowering intermediate parsing representation. This is an internal error in the parsed. {:#?}", token),
+            PartiallyParsed::Group(concatenation) => RegexEntry::Concatenation(concatenation.into_iter().map(|entry| Self::lower_single_partially_parsed(entry)).collect()),
+            PartiallyParsed::Repetition { base, min, max } => RegexEntry::Repetition { base: Box::new(Self::lower_single_partially_parsed(*base)), min, max },
+            PartiallyParsed::Alternation(entries) => RegexEntry::Alternation(entries.into_iter().map(|entry| Self::lower_single_partially_parsed(entry)).collect()),
+        }
+    }
+
+    fn simplify_ast(input: &mut RegexEntry) {
+        match input {
+            RegexEntry::Alternation(members_ref) | RegexEntry::Concatenation(members_ref) => {
+                if members_ref.len() == 1 {
+                    let mut members = Vec::new();
+                    std::mem::swap(&mut members, members_ref);
+                    *input = members.into_iter().next().unwrap();
+                    Self::simplify_ast(input);
+                } else {
+                    for child in members_ref {
+                        Self::simplify_ast(child);
+                    }
+                }
+            }
+            RegexEntry::Repetition { base, .. } => Self::simplify_ast(base),
+            _ => {}
+        }
+    }
 }
 
 #[test]
@@ -329,5 +372,90 @@ fn test_alternations_nested_recursive() {
             ])]),
             PartiallyParsed::Group(vec![PartiallyParsed::Lexed(RegexToken::AnyCharacter)]),
         ])],
+    );
+}
+
+#[cfg(test)]
+fn test_full_parse(to_parse: &str, expected: RegexEntry) {
+    let parsed = RegexEntry::parse(to_parse).unwrap();
+    println!("{:#?}", parsed);
+    assert_eq!(parsed, expected);
+}
+
+#[test]
+fn test_simple_parse() {
+    test_full_parse(
+        ".+",
+        RegexEntry::Repetition {
+            min: Some(1),
+            max: None,
+            base: Box::new(RegexEntry::AnyCharacter),
+        },
+    );
+}
+
+#[test]
+fn test_complex_parse_1() {
+    use unic_ucd_category::GeneralCategory::*;
+    use RegexEntry::*;
+    test_full_parse(
+        r#"((\d\PL)*){1,3}"#,
+        Repetition {
+            base: Box::new(Repetition {
+                base: Box::new(Concatenation(vec![
+                    UnicodeCharacterClass(vec![DecimalNumber, OtherNumber, LetterNumber]),
+                    NegatedUnicodeCharacterClass(vec![
+                        UppercaseLetter,
+                        LowercaseLetter,
+                        TitlecaseLetter,
+                        ModifierLetter,
+                        OtherLetter,
+                    ]),
+                ])),
+                min: Some(0),
+                max: None,
+            }),
+            min: Some(1),
+            max: Some(3),
+        },
+    );
+}
+
+#[test]
+fn test_complex_parse_2() {
+    use crate::parser::character_class::CharacterClass::Range;
+    use unic_ucd_category::GeneralCategory::*;
+    use RegexEntry::*;
+    test_full_parse(
+        r#"([A-Z]+[0-9]*)|(\d+)"#,
+        Alternation(vec![
+            Concatenation(vec![
+                Repetition {
+                    base: Box::new(NonUnicodeCharacterClass(Range {
+                        start: 'A',
+                        end: 'Z',
+                    })),
+                    min: Some(1),
+                    max: None,
+                },
+                Repetition {
+                    base: Box::new(NonUnicodeCharacterClass(Range {
+                        start: '0',
+                        end: '9',
+                    })),
+                    min: Some(0),
+                    max: None,
+                },
+            ]),
+            Repetition {
+                base: Box::new(UnicodeCharacterClass(vec![
+                    DecimalNumber,
+                    OtherNumber,
+                    LetterNumber,
+                ])),
+                min: Some(1),
+                max: None,
+            },
+        ]),
     );
 }
