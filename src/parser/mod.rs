@@ -1,10 +1,11 @@
-pub mod character_class;
-mod tokenizer;
-
-use character_class::CharacterClass;
 use unic_ucd_category::GeneralCategory;
 
+use character_class::CharacterClass;
+
 use self::tokenizer::RegexToken;
+
+pub mod character_class;
+mod tokenizer;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum RegexEntry {
@@ -31,14 +32,16 @@ enum PartiallyParsed {
         min: Option<u64>,
         max: Option<u64>,
     },
-    Alternation(Vec<PartiallyParsed>),
 }
 
 impl RegexEntry {
     pub fn parse(regex: &str) -> Result<Self, String> {
         let lexed = Self::lex(regex)?;
         let grouped = Self::group(lexed);
-        let repetitions = Self::parse_repetitions(grouped)?;
+        let repetitions =
+            Self::parse_for_all_groups_recursively(grouped, &Self::parse_repetitions)?;
+        let alternations =
+            Self::parse_for_all_groups_recursively(repetitions, &Self::parse_alternation)?;
 
         unimplemented!()
     }
@@ -71,6 +74,38 @@ impl RegexEntry {
         parse_group(&mut input.into_iter())
     }
 
+    fn parse_for_all_groups_recursively(
+        input: Vec<PartiallyParsed>,
+        parser: &impl Fn(Vec<PartiallyParsed>) -> Result<Vec<PartiallyParsed>, String>,
+    ) -> Result<Vec<PartiallyParsed>, String> {
+        let mut input = (*parser)(input)?;
+
+        for child in &mut input {
+            Self::parse_child_recursively(child, parser)?;
+        }
+
+        Ok(input)
+    }
+
+    fn parse_child_recursively(
+        child: &mut PartiallyParsed,
+        parser: &impl Fn(Vec<PartiallyParsed>) -> Result<Vec<PartiallyParsed>, String>,
+    ) -> Result<(), String> {
+        match child {
+            PartiallyParsed::Group(child) | PartiallyParsed::Alternation(child) => {
+                let mut child_stack = Vec::new();
+                std::mem::swap(&mut child_stack, child);
+                child_stack = Self::parse_for_all_groups_recursively(child_stack, parser)?;
+                std::mem::swap(&mut child_stack, child);
+            }
+            PartiallyParsed::Repetition { base, .. } => {
+                Self::parse_child_recursively(base.as_mut(), parser)?;
+            }
+            PartiallyParsed::Lexed(_) => {}
+        }
+        Ok(())
+    }
+
     fn parse_repetitions(mut input: Vec<PartiallyParsed>) -> Result<Vec<PartiallyParsed>, String> {
         let mut iterator = input.into_iter().peekable();
 
@@ -78,10 +113,10 @@ impl RegexEntry {
 
         loop {
             match iterator.next() {
-                Some(PartiallyParsed::Lexed(RegexToken::Repetition { .. })) => {
-                    return Err(
-                        "Encountered repetition not succeeding repeatable token or group.".into(),
-                    )
+                Some(PartiallyParsed::Lexed(RegexToken::Repetition { min, max })) => {
+                    return Err(format!(
+                        "Encountered repetition from {:?} to {:?} not succeeding repeatable token or group.", min, max
+                    ));
                 }
                 Some(part) => {
                     if let Some(PartiallyParsed::Lexed(RegexToken::Repetition { .. })) =
@@ -165,85 +200,134 @@ fn test_grouping() {
                 PartiallyParsed::Lexed(RegexToken::AnyCharacter),
                 PartiallyParsed::Lexed(RegexToken::Repetition {
                     min: Some(1),
-                    max: None
+                    max: None,
                 }),
                 PartiallyParsed::Group(vec![
                     PartiallyParsed::Lexed(RegexToken::Repetition {
                         min: Some(1),
-                        max: None
+                        max: None,
                     }),
                     PartiallyParsed::Lexed(RegexToken::AnyCharacter),
                 ]),
             ]),
             PartiallyParsed::Lexed(RegexToken::Repetition {
                 min: Some(5),
-                max: Some(5)
-            })
+                max: Some(5),
+            }),
         ]
     )
 }
 
+#[cfg(test)]
+fn test_util_test_incremental_parser(
+    to_lex: &str,
+    incremental_parser: impl Fn(Vec<PartiallyParsed>) -> Result<Vec<PartiallyParsed>, String>,
+    expected: &Vec<PartiallyParsed>,
+) {
+    let lexed = RegexEntry::lex(to_lex).expect("Lexing failed");
+    let grouped = RegexEntry::group(lexed);
+    let parsed = RegexEntry::parse_for_all_groups_recursively(grouped, &incremental_parser)
+        .expect("Recursive parsing failed");
+    assert_eq!(&parsed, expected);
+}
+
 #[test]
 fn test_repetitions() {
-    let grouped =
-        RegexEntry::parse_repetitions(RegexEntry::group(RegexEntry::lex("(.+(+.)){5,6}").unwrap()))
-            .unwrap();
-
-    assert_eq!(
-        grouped,
-        vec![PartiallyParsed::Repetition {
+    test_util_test_incremental_parser(
+        "(.(.)){5,6}",
+        RegexEntry::parse_repetitions,
+        &vec![PartiallyParsed::Repetition {
             base: Box::new(PartiallyParsed::Group(vec![
                 PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-                PartiallyParsed::Lexed(RegexToken::Repetition {
-                    min: Some(1),
-                    max: None
-                }),
-                PartiallyParsed::Group(vec![
-                    PartiallyParsed::Lexed(RegexToken::Repetition {
-                        min: Some(1),
-                        max: None
-                    }),
-                    PartiallyParsed::Lexed(RegexToken::AnyCharacter),
-                ]),
+                PartiallyParsed::Group(vec![PartiallyParsed::Lexed(RegexToken::AnyCharacter)]),
             ])),
             min: Some(5),
-            max: Some(6)
-        }]
-    )
+            max: Some(6),
+        }],
+    );
+}
+
+#[test]
+fn test_nested_repetitions() {
+    test_util_test_incremental_parser(
+        "(.(.){7,8}[A]{4,}){5,6}",
+        RegexEntry::parse_repetitions,
+        &vec![PartiallyParsed::Repetition {
+            base: Box::new(PartiallyParsed::Group(vec![
+                PartiallyParsed::Lexed(RegexToken::AnyCharacter),
+                PartiallyParsed::Repetition {
+                    base: Box::new(PartiallyParsed::Group(vec![PartiallyParsed::Lexed(
+                        RegexToken::AnyCharacter,
+                    )])),
+                    min: Some(7),
+                    max: Some(8),
+                },
+                PartiallyParsed::Repetition {
+                    base: Box::new(PartiallyParsed::Lexed(
+                        RegexToken::NonUnicodeCharacterClass(CharacterClass::Char('A')),
+                    )),
+                    min: Some(4),
+                    max: None,
+                },
+            ])),
+            min: Some(5),
+            max: Some(6),
+        }],
+    );
 }
 
 #[test]
 fn test_alternations_basic() {
-    let grouped = RegexEntry::parse_alternation(RegexEntry::lex(".|+").unwrap()).unwrap();
-
-    assert_eq!(
-        grouped,
-        vec![PartiallyParsed::Alternation(vec![
+    test_util_test_incremental_parser(
+        ".|+",
+        RegexEntry::parse_alternation,
+        &vec![PartiallyParsed::Alternation(vec![
             PartiallyParsed::Lexed(RegexToken::AnyCharacter),
             PartiallyParsed::Lexed(RegexToken::Repetition {
                 min: Some(1),
-                max: None
-            })
-        ])]
+                max: None,
+            }),
+        ])],
     );
 }
 
 #[test]
 fn test_alternations_nested() {
-    let grouped = RegexEntry::parse_alternation(RegexEntry::lex(".|+|*").unwrap()).unwrap();
-
-    assert_eq!(
-        grouped,
-        vec![PartiallyParsed::Alternation(vec![
+    test_util_test_incremental_parser(
+        ".|+|*",
+        RegexEntry::parse_alternation,
+        &vec![PartiallyParsed::Alternation(vec![
             PartiallyParsed::Lexed(RegexToken::AnyCharacter),
             PartiallyParsed::Lexed(RegexToken::Repetition {
                 min: Some(1),
-                max: None
+                max: None,
             }),
             PartiallyParsed::Lexed(RegexToken::Repetition {
                 min: Some(0),
-                max: None
-            })
-        ])]
+                max: None,
+            }),
+        ])],
+    );
+}
+
+#[test]
+fn test_alternations_nested_recursive() {
+    test_util_test_incremental_parser(
+        "(.|+|*)|(.)",
+        RegexEntry::parse_alternation,
+        &vec![PartiallyParsed::Alternation(vec![
+            PartiallyParsed::Group(vec![PartiallyParsed::Alternation(vec![
+                PartiallyParsed::Lexed(RegexToken::AnyCharacter),
+                PartiallyParsed::Lexed(RegexToken::Repetition {
+                    min: Some(1),
+                    max: None,
+                }),
+                PartiallyParsed::Lexed(RegexToken::Repetition {
+                    min: Some(0),
+                    max: None,
+                }),
+            ])]),
+            PartiallyParsed::Group(vec![PartiallyParsed::Lexed(RegexToken::AnyCharacter)]),
+        ])],
     );
 }

@@ -15,7 +15,7 @@ pub enum RegexToken {
 
 impl RegexToken {
     pub fn parse(regex: impl AsRef<str>) -> Result<Vec<RegexToken>, String> {
-        //this function is a parser combinator: https://en.wikipedia.org/wiki/Parser_combinator
+        //this function is somewhat a parser combinator: https://en.wikipedia.org/wiki/Parser_combinator
         let mut remaining_regex = regex.as_ref();
 
         let mut entries = Vec::new();
