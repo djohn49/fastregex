@@ -45,10 +45,7 @@ impl Automata {
         let terminal_state_id = automata.add_state(State {
             debug_name: "terminal".into(),
             id: 0,
-            transitions: vec![Transition::new(
-                automata.next_state_id(),
-                TransitionCondition::AnyCharacter,
-            )],
+            transitions: vec![],
         });
 
         automata.terminal_states.push(terminal_state_id);
@@ -118,22 +115,11 @@ impl Automata {
                 max: Some(max),
             } => {
                 //create accept states (accept within the repetition)
-                let mut new_target = target;
-                for _ in 0..((*max - *min) + 1) {
-                    let epsilon_trampoline = self.construct_state(
-                        "Repetition Epsilon Trampoline",
-                        [
-                            Transition::new(new_target, TransitionCondition::Epsilon),
-                            Transition::new(target, TransitionCondition::Epsilon),
-                        ],
-                    );
-                    new_target = self.add_regex_entry(base, epsilon_trampoline);
-                }
+                let mut new_target =
+                    self.construct_maximum_repetition_count(target, base, *max - *min);
 
                 //create non-accept states (accept within the repetition)
-                for _ in 0..(*min) {
-                    new_target = self.add_regex_entry(base, new_target);
-                }
+                new_target = self.construct_exact_repetition_count(new_target, base, *min);
 
                 new_target
             }
@@ -170,23 +156,7 @@ impl Automata {
                 base,
                 min: None,
                 max: Some(max),
-            } => {
-                let mut next_target = target;
-                for _ in 0..(*max) {
-                    let epsilon_trampoline = self.construct_state(
-                        "Repetition No-Minimum Epsilon Trampoline",
-                        [Transition::new(next_target, TransitionCondition::Epsilon)],
-                    );
-
-                    next_target = self.add_regex_entry(base, epsilon_trampoline);
-
-                    self.states[epsilon_trampoline]
-                        .transitions
-                        .push(Transition::new(target, TransitionCondition::Epsilon));
-                }
-
-                next_target
-            }
+            } => self.construct_maximum_repetition_count(target, base, *max),
             RegexEntry::Repetition {
                 base,
                 min: None,
@@ -195,6 +165,39 @@ impl Automata {
                 "Encountered repetition with no minimum or maximum. This is an internal error."
             ),
         }
+    }
+
+    fn construct_exact_repetition_count(
+        &mut self,
+        target: usize,
+        base: &RegexEntry,
+        count: u64,
+    ) -> usize {
+        let mut new_target = target;
+        for _ in 0..count {
+            new_target = self.add_regex_entry(base, new_target);
+        }
+        new_target
+    }
+
+    fn construct_maximum_repetition_count(
+        &mut self,
+        target: usize,
+        base: &RegexEntry,
+        max: u64,
+    ) -> usize {
+        let mut last_target = target;
+        for _ in 0..max {
+            let this_iteration_start = self.add_regex_entry(base, last_target);
+            last_target = self.construct_state(
+                "Maximum Repetition Count Epsilon Trampoline",
+                [
+                    Transition::new(this_iteration_start, TransitionCondition::Epsilon),
+                    Transition::new(target, TransitionCondition::Epsilon),
+                ],
+            )
+        }
+        last_target
     }
 
     fn construct_state(
