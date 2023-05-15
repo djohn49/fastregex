@@ -1,5 +1,6 @@
-use crate::parser::character_class::CharacterClass;
 use unic_ucd_category::GeneralCategory;
+
+use crate::parser::character_class::CharacterClass;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RegexToken {
@@ -11,6 +12,7 @@ pub enum RegexToken {
     OpenGroup,
     CloseGroup,
     Repetition { min: Option<u64>, max: Option<u64> },
+    Literal(char),
 }
 
 impl RegexToken {
@@ -59,6 +61,7 @@ impl RegexToken {
         try_entry!(Self::try_parse_negated_one_letter_unicode_class_name);
         try_entry!(Self::try_parse_character_class);
         try_entry!(Self::try_parse_repetition);
+        try_entry!(Self::try_parse_single_char);
 
         Ok(None)
     }
@@ -283,6 +286,17 @@ impl RegexToken {
         )))
     }
 
+    fn try_parse_single_char(remaining: &str) -> Result<Option<(RegexToken, &str)>, String> {
+        if remaining.len() == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some((
+            RegexToken::Literal(remaining.chars().nth(0).unwrap()),
+            &remaining[1..],
+        )))
+    }
+
     fn parse_string_until_bracket(remaining: &str) -> String {
         let mut class_name = String::new();
 
@@ -380,8 +394,9 @@ impl RegexToken {
 
 #[cfg(test)]
 mod test {
-    use super::RegexToken;
     use crate::parser::character_class::CharacterClass;
+
+    use super::RegexToken;
 
     fn assert_equal(regex: &str, expected: Vec<RegexToken>) {
         let parsed = match RegexToken::parse(regex) {

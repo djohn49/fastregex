@@ -13,6 +13,7 @@ pub enum RegexEntry {
     UnicodeCharacterClass(Vec<GeneralCategory>),
     NegatedUnicodeCharacterClass(Vec<GeneralCategory>),
     NonUnicodeCharacterClass(CharacterClass),
+    Literal(char),
     Concatenation(Vec<RegexEntry>),
     Alternation(Vec<RegexEntry>),
     Repetition {
@@ -205,6 +206,7 @@ impl RegexEntry {
             PartiallyParsed::Lexed(RegexToken::NonUnicodeCharacterClass(class)) => RegexEntry::NonUnicodeCharacterClass(class),
             PartiallyParsed::Lexed(RegexToken::NegatedUnicodeCharacterClass(categories)) => RegexEntry::NegatedUnicodeCharacterClass(categories),
             PartiallyParsed::Lexed(RegexToken::UnicodeCharacterClass(categories)) => RegexEntry::UnicodeCharacterClass(categories),
+            PartiallyParsed::Lexed(RegexToken::Literal(literal)) => RegexEntry::Literal(literal),
             PartiallyParsed::Lexed(token) => panic!("Encountered unexpected lexed but not parsed token when lowering intermediate parsing representation. This is an internal error in the parsed. {:#?}", token),
             PartiallyParsed::Group(concatenation) => RegexEntry::Concatenation(concatenation.into_iter().map(|entry| Self::lower_single_partially_parsed(entry)).collect()),
             PartiallyParsed::Repetition { base, min, max } => RegexEntry::Repetition { base: Box::new(Self::lower_single_partially_parsed(*base)), min, max },
@@ -455,6 +457,71 @@ fn test_complex_parse_2() {
                 ])),
                 min: Some(1),
                 max: None,
+            },
+        ]),
+    );
+}
+
+#[test]
+fn test_url() {
+    use crate::parser::character_class::CharacterClass::*;
+    use unic_ucd_category::GeneralCategory::*;
+    use RegexEntry::*;
+    test_full_parse(
+        r#"https?://([A-Za-z.]+/)*([A-Za-z.]+)?"#,
+        Concatenation(vec![
+            Literal('h'),
+            Literal('t'),
+            Literal('t'),
+            Literal('p'),
+            Repetition {
+                base: Box::new(Literal('s')),
+                min: Some(0),
+                max: Some(1),
+            },
+            Literal(':'),
+            Literal('/'),
+            Literal('/'),
+            Repetition {
+                base: Box::new(Concatenation(vec![
+                    Repetition {
+                        base: Box::new(NonUnicodeCharacterClass(Disjunction(vec![
+                            Range {
+                                start: 'A',
+                                end: 'Z',
+                            },
+                            Range {
+                                start: 'a',
+                                end: 'z',
+                            },
+                            Char('.'),
+                        ]))),
+                        min: Some(1),
+                        max: None,
+                    },
+                    Literal('/'),
+                ])),
+                min: Some(0),
+                max: None,
+            },
+            Repetition {
+                base: Box::new(Repetition {
+                    base: Box::new(NonUnicodeCharacterClass(Disjunction(vec![
+                        Range {
+                            start: 'A',
+                            end: 'Z',
+                        },
+                        Range {
+                            start: 'a',
+                            end: 'z',
+                        },
+                        Char('.'),
+                    ]))),
+                    min: Some(1),
+                    max: None,
+                }),
+                min: Some(0),
+                max: Some(1),
             },
         ]),
     );
